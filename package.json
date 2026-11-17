@@ -1,0 +1,66 @@
+{
+  "name": "cs2-web-client",
+  "version": "0.1.0",
+  "description": "Counter-Strike 2 inventory and storage units over Steam's own protocol, from a browser extension or Node.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "cs2",
+    "counter-strike-2",
+    "csgo",
+    "steam",
+    "game-coordinator",
+    "storage-unit",
+    "inventory",
+    "browser",
+    "websocket"
+  ],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && esbuild 'src/**/*.ts' --outdir=dist --format=esm --platform=neutral --target=es2022 --supported:import-attributes=true --log-level=warning && cd src && find . -name '*.json' -exec cp --parents {} ../dist \\;",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "gen": "buf generate --template buf.gen.steam.yaml && buf generate --template buf.gen.csgo.yaml",
+    "prepublishOnly": "pnpm test && pnpm build"
+  },
+  "packageManager": "pnpm@12.9.1",
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.16.0"
+  },
+  "peerDependencies": {
+    "ws": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.73.0",
+    "@bufbuild/protoc-gen-es": "^2.16.0",
+    "@types/node": "^22.20.5",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
+    "qrcode-terminal": "^0.12.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7",
+    "ws": "^8.22.0"
+  }
+}

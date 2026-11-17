@@ -1,0 +1,10 @@
+version: v2
+clean: true
+inputs:
+  - directory: proto/steam
+plugins:
+  - local: protoc-gen-es
+    out: src/gen/steam
+    opt:
+      - target=ts
+      - import_extension=js

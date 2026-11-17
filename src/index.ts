@@ -1,0 +1,21 @@
+// Browser-safe entry point. The Node transport is `cs2-web-client/transport-node` (needs `ws`);
+// fakes for tests are under `cs2-web-client/testing/*`, the generated protobufs under `cs2-web-client/gen/*`.
+export * from "./transport.js";
+export * from "./transport-browser.js";
+export * from "./server-list.js";
+export * from "./cm/open-first.js";
+export * from "./cm/connection.js";
+export * from "./cm/client.js";
+export * from "./qr-auth.js";
+export * from "./client-version.js";
+export * from "./gc/client.js";
+export * from "./gc/so-cache.js";
+export * from "./gc/item-ops.js";
+export * from "./gc/agent-patches.js";
+export * from "./gc/store.js";
+export * from "./gc/purchase.js";
+export * from "./snapshot.js";
+export * from "./types.js";
+export * from "./items/attributes.js";
+export * from "./items/decode.js";
+export * from "./items/defs.js";
