@@ -1,8 +1,14 @@
 {
   "name": "cs2-web-client",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Counter-Strike 2 inventory and storage units over Steam's own protocol, from a browser extension or Node.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CS2Cap/cs2-web-client.git"
+  },
+  "homepage": "https://github.com/CS2Cap/cs2-web-client#readme",
+  "bugs": "https://github.com/CS2Cap/cs2-web-client/issues",
   "type": "module",
   "keywords": [
     "cs2",
