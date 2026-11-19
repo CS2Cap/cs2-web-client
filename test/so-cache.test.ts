@@ -9,6 +9,7 @@ import {
   CMsgClientWelcomeSchema,
 } from "../src/gen/csgo/gcsdk_gcmessages_pb.js";
 import { fromBinary } from "@bufbuild/protobuf";
+import { CSOAccountSeasonalOperationSchema } from "../src/gen/csgo/cstrike15_gcmessages_pb.js";
 import { buildSyntheticCacheSubscribed, makeEconItem } from "../src/testing/synthetic.js";
 
 const single = (typeId: number, item = makeEconItem()) =>
@@ -35,6 +36,21 @@ describe("SOCache", () => {
     expect(cache.raw.map((r) => r.typeId)).toEqual([20]);
     cache.applyDestroy(record);
     expect(cache.offersShown(5176)).toBeNull();
+  });
+
+  it("reads a Major's token balance from CSOAccountSeasonalOperation, SO type 40, by its season (live 2026-11-18: 100 after activating, 75 after one sticker)", () => {
+    const cache = new SOCache();
+    const op = (balance: number) => toBinary(CMsgSOSingleObjectSchema, create(CMsgSOSingleObjectSchema, {
+      typeId: 40, objectData: toBinary(CSOAccountSeasonalOperationSchema, create(CSOAccountSeasonalOperationSchema, { seasonValue: 13, redeemableBalance: balance, seasonPassTime: 1795052154 })),
+    }));
+    expect(cache.tokenBalance(13)).toBeNull();
+    cache.applyCreate(op(100));
+    cache.applyUpdate(op(75));
+    expect(cache.tokenBalance(13)).toBe(75);
+    expect(cache.tokenBalance(12)).toBeNull();
+    cache.applyDestroy(op(75));
+    expect(cache.tokenBalance(13)).toBeNull();
+    expect(cache.raw).toEqual([]);
   });
 
   it("keeps objects of undecoded types raw, never as items", () => {

@@ -11,7 +11,7 @@ import {
   CMsgSOMultipleObjectsSchema,
 } from "../gen/csgo/gcsdk_gcmessages_pb.js";
 import { CSOEconItemSchema } from "../gen/csgo/base_gcmessages_pb.js";
-import { CSOAccountItemPersonalStoreSchema, CSOAccountKeychainRemoveToolChargesSchema, CSOAccountXpShopSchema, CSOVolatileItemOfferSchema } from "../gen/csgo/cstrike15_gcmessages_pb.js";
+import { CSOAccountItemPersonalStoreSchema, CSOAccountKeychainRemoveToolChargesSchema, CSOAccountSeasonalOperationSchema, CSOAccountXpShopSchema, CSOVolatileItemOfferSchema } from "../gen/csgo/cstrike15_gcmessages_pb.js";
 
 /** SO type id of CSOEconItem. */
 export const SO_TYPE_ECON_ITEM = 1;
@@ -23,6 +23,8 @@ const SO_TYPE_PERSONAL_STORE = 4;
 const SO_TYPE_XP_SHOP = 6;
 /** SO type id of CSOVolatileItemOffer: per terminal kind, the collection's skins offered on any terminal, as a set sorted by faux id (live 2026-10-27: no offer order kept; CS2's "Collection Catalog XP", per its UpdateCollectionDots). Steam only holds it for a while after CS2 opens a terminal (gone 73 min after the last offer, live 2026-10-27). */
 const SO_TYPE_VOLATILE_OFFER = 20;
+/** SO type id of CSOAccountSeasonalOperation: one per season, a Major's holding its token balance once tokens were activated (live 2026-11-18). */
+const SO_TYPE_SEASONAL_OPERATION = 40;
 /** Non-economy flag: store-bought untradable keys, name tags and Sticker Slabs carry it (flags 24), and Steam's own inventory shows those. */
 export const FLAG_HIDDEN = 0x8;
 /** A faux item id (0xF000000000000000 | def) is a placeholder Steam keeps, never an owned item (live 2026-10-28: a CS:GO Weapon Case). */
@@ -45,6 +47,7 @@ export class SOCache {
   private readonly items = new Map<string, DomainItem>();
   private readonly offers = new Map<number, bigint[]>();
   private stars: number | null = null;
+  private readonly tokens = new Map<number, number>();
   private personal: PersonalStore | null = null;
   private tracks: number[] = [];
   private readonly listeners: Array<(m: SOMutation) => void> = [];
@@ -68,6 +71,9 @@ export class SOCache {
 
   /** Armory stars the account can spend; null before Steam sends the shop object. */
   get armoryStars(): number | null { return this.stars; }
+
+  /** Tokens the account can spend in a Major's shop, by the Major's season (its `credits_id`); null while it has activated none. */
+  tokenBalance(season: number): number | null { return this.tokens.get(season) ?? null; }
 
   /** The weekly care package; null before Steam sends it. */
   get personalStore(): PersonalStore | null { return this.personal; }
@@ -128,6 +134,10 @@ export class SOCache {
       } catch { this.failures++; }
       return;
     }
+    if (typeId === SO_TYPE_SEASONAL_OPERATION) {
+      try { const op = fromBinary(CSOAccountSeasonalOperationSchema, data); this.tokens.set(op.seasonValue, op.redeemableBalance); } catch { this.failures++; }
+      return;
+    }
     if (typeId === SO_TYPE_VOLATILE_OFFER) {
       try { const o = fromBinary(CSOVolatileItemOfferSchema, data); this.offers.set(o.defidx, [...o.fauxItemid]); } catch { this.failures++; }
     }
@@ -168,7 +178,8 @@ export class SOCache {
     const o = fromBinary(CMsgSOSingleObjectSchema, body);
     if (o.typeId === SO_TYPE_REMOVAL_CHARGES) this.charges = 0;
     if (o.typeId === SO_TYPE_PERSONAL_STORE) this.personal = null;
-    if (o.typeId === SO_TYPE_VOLATILE_OFFER) { try { this.offers.delete(fromBinary(CSOVolatileItemOfferSchema, o.objectData).defidx); } catch { this.failures++; } }
+    if (o.typeId === SO_TYPE_SEASONAL_OPERATION) { try { this.tokens.delete(fromBinary(CSOAccountSeasonalOperationSchema, o.objectData).seasonValue); } catch { this.failures++; } }
+    else if (o.typeId === SO_TYPE_VOLATILE_OFFER) { try { this.offers.delete(fromBinary(CSOVolatileItemOfferSchema, o.objectData).defidx); } catch { this.failures++; } }
     else if (o.typeId !== SO_TYPE_ECON_ITEM) this.keepRaw(o.typeId, "destroy", o.objectData);
     const item = this.decode(o.typeId, o.objectData);
     if (!item) return;

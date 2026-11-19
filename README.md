@@ -16,6 +16,8 @@ A headless CS2 client in TypeScript. It logs on to Steam over WebSocket and spea
 - All storage units and their contents.
 - The CS2 in-game store catalogue with prices in the account's currency.
 - The Armory star balance and the Weekly Care Package on offer.
+- A Major's sticker and souvenir shop with its token prices, and the account's token balance.
+- A Major's Pick'Em bracket and the account's saved picks.
 
 ### Storage units
 
@@ -42,6 +44,8 @@ A headless CS2 client in TypeScript. It logs on to Steam over WebSocket and spea
 - Buy from the CS2 in-game store using Steam Wallet funds.
 - Activate an Armory Pass and spend Armory stars on rewards.
 - Claim Weekly Care Package rewards.
+- Buy and activate a Major's Viewer Pass and tokens, and spend the tokens in the Major's shop.
+- Save Pick'Em picks for a Major.
 
 ## Built for CS2Cap Inventory
 

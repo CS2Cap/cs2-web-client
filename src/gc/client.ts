@@ -48,11 +48,13 @@ export type MutationIntent =
   | { kind: "firstOffer"; itemId: string }
   // `itemId` names no item ("armory"); `starsBefore` is filled from the live cache.
   | { kind: "redeemArmory"; itemId: string; campaignId: number; redeemId: number; stars: number; starsBefore: number | null }
+  // A Major shop checkout. `itemId` names no item ("major"); `campaignId` is the Major's `credits_id`, `offerIds` the cart's faux ids (one per copy), `tokens` its total.
+  | { kind: "buyWithTokens"; itemId: string; campaignId: number; offerIds: string[]; tokens: number; tokensBefore: number | null }
   | { kind: "craft"; itemId: string; itemIds: string[]; recipe: number }
   // `itemId` is the slab: an empty Sticker Slab to seal `stickerItemId` in, or a filled one to crack open.
   | { kind: "slabSticker"; itemId: string; stickerItemId: string }
   | { kind: "crackSlab"; itemId: string }
-  // `itemId` is an Armory Pass (def 1354), consumed into Armory stars.
+  // `itemId` is an Armory Pass (def 1354), consumed into Armory stars, a Major's token item, consumed into its token balance, or a Major's Viewer Pass, consumed into the event coin (a non-economy item, reported as created).
   | { kind: "activatePass"; itemId: string }
   // `itemId` names no item ("carepackage"); `itemIds` are the picked rewards; `cost`, `generationTime` and `balanceBefore` are filled from the live cache.
   | { kind: "claimRewards"; itemId: string; itemIds: string[]; cost: number; generationTime: number | null; balanceBefore: number | null };

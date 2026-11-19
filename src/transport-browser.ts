@@ -31,7 +31,7 @@ export class BrowserWsTransport implements Transport {
       };
     });
   }
-  send(frame: Uint8Array): void { this.ws?.send(frame); }
+  send(frame: Uint8Array): void { this.ws?.send(frame as Uint8Array<ArrayBuffer>); }
   onMessage(cb: (f: Uint8Array) => void): void { this.msgCb = cb; }
   onClose(cb: (code: number, reason: string) => void): void { this.closeCb = cb; }
   close(): void {

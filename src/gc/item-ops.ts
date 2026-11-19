@@ -11,7 +11,7 @@ import type { DomainItem } from "../types.js";
 const POLL_MS = 10;
 // Opening and trading up create an item; once the inputs are gone, its SOCreate may still be in flight.
 const CREATED_SETTLE_MS = 3000;
-const CREATES = new Set<MutationIntent["kind"]>(["open", "craft", "redeemArmory", "slabSticker", "crackSlab", "activatePass", "claimRewards"]);
+const CREATES = new Set<MutationIntent["kind"]>(["open", "craft", "redeemArmory", "buyWithTokens", "slabSticker", "crackSlab", "activatePass", "claimRewards"]);
 // Sticker wear is a float32 on the wire; a scrape step is far larger than this.
 const WEAR_EPSILON = 1e-6;
 const APPLY_STICKER = 1086;
@@ -147,13 +147,19 @@ function send(gc: GCClient, intent: MutationIntent): void {
         campaignId: intent.campaignId, redeemId: intent.redeemId, redeemableBalance: intent.starsBefore ?? 0, expectedCost: intent.stars,
       })), { proto: true, job: true });
       return;
+    case "buyWithTokens":
+      // CS2's ActionOperationFauxPurchase: no redeem_id, the cart in volatile_shop (live 2026-11-18).
+      gc.sendRaw(REDEEM_MISSION_REWARD, toBinary(CMsgGCCstrike15_v2_ClientRedeemMissionRewardSchema, create(CMsgGCCstrike15_v2_ClientRedeemMissionRewardSchema, {
+        campaignId: intent.campaignId, redeemableBalance: intent.tokensBefore ?? 0, expectedCost: intent.tokens, volatileShop: intent.offerIds.map(BigInt),
+      })), { proto: true, job: true });
+      return;
     case "claimRewards":
       gc.sendRaw(REDEEM_FREE_REWARD, toBinary(CMsgGCCstrike15_v2_ClientRedeemFreeRewardSchema, create(CMsgGCCstrike15_v2_ClientRedeemFreeRewardSchema, {
         generationTime: intent.generationTime ?? 0, redeemableBalance: intent.balanceBefore ?? 0, items: intent.itemIds.map(BigInt),
       })), { proto: true, job: true });
       return;
     case "activatePass":
-      // CS2's Armory Activate is UseTool(pass, '') (xpshop.vts_c); the pass is a usable_gc #ConsumeItem tool like the Charm Detachment Pack.
+      // CS2's Armory Activate is UseTool(pass, '') (xpshop.vts_c), as is a Major pass's; the pass is a usable_gc #ConsumeItem tool like the Charm Detachment Pack.
       gc.sendRaw(USE_ITEM, toBinary(CMsgUseItemSchema, create(CMsgUseItemSchema, { itemId: BigInt(intent.itemId) })), { proto: true });
       return;
     case "craft":
@@ -182,7 +188,7 @@ export function changedItem(cache: Pick<SOCache, "get" | "rootItems" | "armorySt
 }
 
 /** Has the intended change landed in the SO cache? Used to confirm a send and to reconcile a pending one. */
-export function itemApplied(cache: Pick<SOCache, "get" | "rootItems" | "armoryStars" | "personalStore" | "isUnclaimedReward">, intent: MutationIntent): boolean {
+export function itemApplied(cache: Pick<SOCache, "get" | "rootItems" | "armoryStars" | "tokenBalance" | "personalStore" | "isUnclaimedReward">, intent: MutationIntent): boolean {
   const item = changedItem(cache, intent);
   switch (intent.kind) {
     case "applyPatch":
@@ -222,6 +228,8 @@ export function itemApplied(cache: Pick<SOCache, "get" | "rootItems" | "armorySt
       return !!item && item.customName === "";
     case "redeemArmory":
       return intent.starsBefore != null && cache.armoryStars === intent.starsBefore - intent.stars;
+    case "buyWithTokens":
+      return intent.tokensBefore != null && cache.tokenBalance(intent.campaignId) === intent.tokensBefore - intent.tokens;
     case "claimRewards": {
       // The balance drops; should Steam drop the store object instead, the picked rewards are owned now.
       const store = cache.personalStore;
@@ -256,8 +264,8 @@ async function usePack(gc: GCClient, intent: MutationIntent, deadline: number): 
 
 /** Sends one item action and waits for its change. No change in time, or a dropped session, is ambiguous: MutationTimeout. */
 export async function runItemOp(gc: GCClient, intent: MutationIntent, timeoutMs: number): Promise<{ created: string[]; itemId: string }> {
-  // Claimed rewards can be untradable (a Chicken Egg), which Steam keeps among the non-economy items.
-  const owned = () => (intent.kind === "claimRewards" ? [...gc.cache.rootItems(), ...gc.cache.nonEconomyItems()] : gc.cache.rootItems());
+  // Claimed rewards can be untradable (a Chicken Egg) and a Viewer Pass's coin always is: Steam keeps those among the non-economy items.
+  const owned = () => (intent.kind === "claimRewards" || intent.kind === "activatePass" ? [...gc.cache.rootItems(), ...gc.cache.nonEconomyItems()] : gc.cache.rootItems());
   const before = new Set(owned().map((i) => i.gcItemId));
   let refusal: string | null = null;
   const off = gc.onGcMessage((t, body) => {

@@ -16,7 +16,13 @@ const CURRENCIES: Record<number, string> = {
 };
 
 /** One thing CS2's store sells, priced in the wallet's currency (cents). `itemLink` is its items_game name. */
-export interface StoreEntry { name: string; itemLink: string; category: string; priceCents: number }
+export interface StoreEntry {
+  name: string; itemLink: string; category: string;
+  /** What Steam bills: the sale price while the entry is discounted (any other amount is refused, result 200). */
+  priceCents: number;
+  /** The undiscounted price, only while the entry is on sale. */
+  listPriceCents?: number;
+}
 /** The sheet's currency table: `local` units of the wallet currency to `usd` units. Terminal offers (US cents) bill ceil(usd × local / usd) (live 2026-10-28). */
 export interface SheetRate { usd: number; local: number }
 export interface StoreSheet { currency: number; currencyCode: string; version: number; entries: StoreEntry[]; usdRate: SheetRate | null }
@@ -30,14 +36,19 @@ export function sheetRate(sheet: KV, currencyCode: string): SheetRate | null {
   return typeof usd === "number" && typeof local === "number" && usd > 0 && local > 0 ? { usd, local } : null;
 }
 
+// The sheet stores USD prices as 64-bit integers, the other currencies as 32-bit.
+const cents = (v: unknown): number | null => (typeof v === "bigint" ? Number(v) : typeof v === "number" ? v : null);
+
 /** The store's entries priced in `currency`, from the decoded price sheet; entries with no price there are left out. */
 export function storeEntries(sheet: KV, currencyCode: string): StoreEntry[] {
   const entries = ((sheet.store as KV | undefined)?.entries ?? {}) as KV;
   return Object.entries(entries).flatMap(([name, raw]) => {
     const e = raw as KV;
-    const price = (e.prices as KV | undefined)?.[currencyCode];
-    if (typeof price !== "number") return [];
-    return [{ name, itemLink: String(e.item_link ?? name), category: String(e.category_tags ?? ""), priceCents: price }];
+    const list = cents((e.prices as KV | undefined)?.[currencyCode]);
+    if (list === null) return [];
+    const sale = cents((e.sale_prices as KV | undefined)?.[currencyCode]);
+    const entry = { name, itemLink: String(e.item_link ?? name), category: String(e.category_tags ?? "") };
+    return [sale === null ? { ...entry, priceCents: list } : { ...entry, priceCents: sale, listPriceCents: list }];
   });
 }
 

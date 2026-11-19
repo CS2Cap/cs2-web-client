@@ -4,8 +4,8 @@ import { GCClient, MutationTimeout } from "../src/gc/client.js";
 import { GCMsg } from "../src/emsg.js";
 import { wrapClientToGC, parseClientFromGC } from "../src/gc/envelope.js";
 import { CMsgCasketItemSchema } from "../src/gen/csgo/econ_gcmessages_pb.js";
-import { CMsgApplyStickerSchema, CMsgCraftItemsRequestSchema, CMsgModifyItemStringAttrSchema, CMsgOpenCrateSchema, CMsgUseItemSchema } from "../src/gen/csgo/base_gcmessages_pb.js";
-import { CMsgGCCstrike15_v2_ClientRedeemMissionRewardSchema, CSOAccountXpShopSchema } from "../src/gen/csgo/cstrike15_gcmessages_pb.js";
+import { CMsgApplyStickerSchema, CMsgCraftItemsRequestSchema, CMsgModifyItemStringAttrSchema, CMsgOpenCrateSchema, CMsgUseItemSchema, CSOEconItemSchema } from "../src/gen/csgo/base_gcmessages_pb.js";
+import { CMsgGCCstrike15_v2_ClientRedeemMissionRewardSchema, CSOAccountSeasonalOperationSchema, CSOAccountXpShopSchema } from "../src/gen/csgo/cstrike15_gcmessages_pb.js";
 import { CMsgSOSingleObjectSchema } from "../src/gen/csgo/gcsdk_gcmessages_pb.js";
 import { CMsgGCClientSchema } from "../src/gen/steam/steammessages_clientserver_2_pb.js";
 import { CMsgProtoBufHeaderSchema } from "../src/gen/steam/steammessages_base_pb.js";
@@ -453,6 +453,62 @@ describe("redeem Armory stars", () => {
     const { gc, feed } = offlineGc([]);
     feed(GCMsg.SOCreate, shop(after));
     expect(itemApplied(gc.cache, redeem)).toBe(expected);
+  });
+});
+
+describe("buy with Major tokens", () => {
+  const balance = (tokens: number) => toBinary(CMsgSOSingleObjectSchema, create(CMsgSOSingleObjectSchema, {
+    typeId: 40, objectData: toBinary(CSOAccountSeasonalOperationSchema, create(CSOAccountSeasonalOperationSchema, { seasonValue: 13, redeemableBalance: tokens })),
+  }));
+  // Three paper stickers checked out live 2026-11-18 (Singapore 2026: 25 tokens each, one twice).
+  const buy = { kind: "buyWithTokens" as const, itemId: "major", campaignId: 13, offerIds: ["17293822569900082361", "17293822569876948153", "17293822569876948153"], tokens: 75, tokensBefore: 75 };
+
+  it("sends ClientRedeemMissionReward with the cart in volatile_shop, as CS2's ActionOperationFauxPurchase, and reports every new item", async () => {
+    const { gc, feed, sent } = offlineGc([]);
+    feed(GCMsg.SOCreate, balance(75));
+    const p = runItemOp(gc, buy, 5000);
+    expect(sent[0].type).toBe(9209);
+    expect(sent[0].job).not.toBe(0xffffffffffffffffn);
+    const m = fromBinary(CMsgGCCstrike15_v2_ClientRedeemMissionRewardSchema, sent[0].body);
+    expect({ campaign: m.campaignId, balance: m.redeemableBalance, cost: m.expectedCost, cart: m.volatileShop.map(String) }).toEqual({ campaign: 13, balance: 75, cost: 75, cart: buy.offerIds });
+    expect(isFieldSet(m, CMsgGCCstrike15_v2_ClientRedeemMissionRewardSchema.field.redeemId)).toBe(false);
+    for (const id of [900n, 901n, 902n]) feed(GCMsg.SOCreate, soItem({ id, defIndex: 1209 }));
+    feed(GCMsg.SOUpdate, balance(0));
+    await expect(p).resolves.toMatchObject({ created: ["900", "901", "902"] });
+  });
+
+  it.each([
+    ["balance dropped by the cost", 0, true],
+    ["balance unchanged", 75, false],
+  ] as const)("itemApplied: %s", (_n, after, expected) => {
+    const { gc, feed } = offlineGc([]);
+    feed(GCMsg.SOCreate, balance(after));
+    expect(itemApplied(gc.cache, buy)).toBe(expected);
+  });
+
+  it("activates a token item like an Armory Pass: UseItem, done when the item is gone (live 2026-11-18)", async () => {
+    const tokens = { id: 54605643692n, defIndex: 5409 };
+    const { gc, feed, sent } = offlineGc([tokens]);
+    const p = runItemOp(gc, { kind: "activatePass", itemId: "54605643692" }, 2000);
+    expect(sent[0].type).toBe(1025);
+    expect(fromBinary(CMsgUseItemSchema, sent[0].body).itemId).toBe(54605643692n);
+    feed(GCMsg.SODestroy, soItem(tokens));
+    feed(GCMsg.SOCreate, balance(100));
+    await p;
+    expect(gc.cache.tokenBalance(13)).toBe(100);
+  });
+
+  it("activates a Viewer Pass: UseItem, the pass goes and its non-economy coin is the created item (live 2026-11-18)", async () => {
+    const pass = { id: 54606581410n, defIndex: 5410 };
+    const coin = toBinary(CMsgSOSingleObjectSchema, create(CMsgSOSingleObjectSchema, { typeId: 1, objectData: toBinary(CSOEconItemSchema, { ...makeEconItem({ id: 54606583993n, defIndex: 5412 }), flags: 8 }) }));
+    const { gc, feed, sent } = offlineGc([pass]);
+    const p = runItemOp(gc, { kind: "activatePass", itemId: "54606581410" }, 2000);
+    expect(sent[0].type).toBe(1025);
+    expect(fromBinary(CMsgUseItemSchema, sent[0].body).itemId).toBe(54606581410n);
+    feed(GCMsg.SODestroy, soItem(pass));
+    feed(GCMsg.SOCreate, coin);
+    await expect(p).resolves.toEqual({ created: ["54606583993"], itemId: "54606581410" });
+    expect(gc.cache.nonEconomyItems().map((i) => i.defIndex)).toEqual([5412]);
   });
 });
 

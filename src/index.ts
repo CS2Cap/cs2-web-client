@@ -14,6 +14,8 @@ export * from "./gc/item-ops.js";
 export * from "./gc/agent-patches.js";
 export * from "./gc/store.js";
 export * from "./gc/purchase.js";
+export * from "./gc/major-shop.js";
+export * from "./gc/pickem.js";
 export * from "./snapshot.js";
 export * from "./types.js";
 export * from "./items/attributes.js";

@@ -35,6 +35,24 @@ describe("storeEntries", () => {
     expect(entries.find((e) => e.name === "Name Tag")?.priceCents).toBe(269);
     expect(entries.length).toBeGreaterThan(200);
   });
+
+  it("prices a discounted entry at its sale price, the one Steam bills (live 2026-11-18: a pass pack at 2449, refused at its 2599 list price)", async () => {
+    const { storeEntries } = await import("../src/gc/store.js");
+    const sheet = { store: { entries: {
+      pack: { item_link: "pack", category_tags: "Misc", prices: { CAD: 2599 }, sale_prices: { CAD: 2449 } },
+      pass: { item_link: "pass", category_tags: "Misc", prices: { CAD: 1369 } },
+    } } };
+    expect(storeEntries(sheet, "CAD")).toEqual([
+      { name: "pack", itemLink: "pack", category: "Misc", priceCents: 2449, listPriceCents: 2599 },
+      { name: "pass", itemLink: "pass", category: "Misc", priceCents: 1369 },
+    ]);
+  });
+
+  it("reads USD prices, which the sheet stores as 64-bit integers (live 2026-11-18)", async () => {
+    const { storeEntries } = await import("../src/gc/store.js");
+    const sheet = { store: { entries: { pack: { item_link: "pack", category_tags: "Misc", prices: { USD: 1899n }, sale_prices: { USD: 1799n } } } } };
+    expect(storeEntries(sheet, "USD")).toEqual([{ name: "pack", itemLink: "pack", category: "Misc", priceCents: 1799, listPriceCents: 1899 }]);
+  });
 });
 
 describe("sheetRate", () => {
